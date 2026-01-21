@@ -3,7 +3,11 @@ name: Testing
 on:
   pull_request:
   push:
-    paths-ignore: [LICENSE, README.md]
+    paths-ignore:
+      - .github/workflows/lint.yml
+      - CHANGELOG.md
+      - LICENSE
+      - README.md
 
 jobs:
   apt-opts:
@@ -80,6 +84,25 @@ jobs:
           dpkg --contents my_artifacts/test_1_amd64.deb | grep ./usr/bin/mybin
           test -f my_artifacts/test_1_amd64.buildinfo
           test -f my_artifacts/test_1_amd64.changes
+
+  different-checkout-dir:
+    needs: [single-package]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: action
+      - uses: ./action
+        env:
+          DEB_BUILD_OPTIONS: noautodbgsym
+        with:
+          buildpackage-opts: --build=binary --no-sign
+          source-dir: action/test
+      - run: |
+          dpkg --info debian/artifacts/test_1_amd64.deb
+          dpkg --contents debian/artifacts/test_1_amd64.deb | grep ./usr/bin/mybin
+          test -f debian/artifacts/test_1_amd64.buildinfo
+          test -f debian/artifacts/test_1_amd64.changes
 
   different-docker-image:
     needs: [single-package]
@@ -423,6 +446,40 @@ jobs:
           dpkg --contents test_1_amd64.deb | grep ./usr/bin/mybin
           test -f test_1_amd64.buildinfo
           test -f test_1_amd64.changes
+
+  outputs-artifacts:
+    needs: [single-package]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./
+        env:
+          DEB_BUILD_OPTIONS: noautodbgsym
+        id: build
+        with:
+          buildpackage-opts: --build=binary --no-sign
+          source-dir: test
+      - run: |
+          dpkg --info debian/artifacts/test_1_amd64.deb
+          dpkg --contents debian/artifacts/test_1_amd64.deb | grep ./usr/bin/mybin
+          test -f debian/artifacts/test_1_amd64.buildinfo
+          test -f debian/artifacts/test_1_amd64.changes
+          printf "${{ steps.build.outputs.artifacts }}" | grep -x debian/artifacts/test_1_amd64.buildinfo
+          printf "${{ steps.build.outputs.artifacts }}" | grep -x debian/artifacts/test_1_amd64.changes
+          printf "${{ steps.build.outputs.artifacts }}" | grep -x debian/artifacts/test_1_amd64.deb
+          test "$(printf '%s\n' "${{ steps.build.outputs.artifacts }}" | wc -l)" -eq 3
+
+  probe-env:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./
+        continue-on-error: true
+        id: build-deb
+        with:
+          docker-image: alpine:latest
+      - run: |
+          test "${{ steps.build-deb.outcome }}" = 'failure'
 
   setup-hook:
     needs: [single-package]

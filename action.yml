@@ -46,6 +46,11 @@ inputs:
     default: ./
     description: Path relative to $GITHUB_WORKSPACE that contains the package sources
     required: true
+outputs:
+  artifacts:
+    description: Newline-separated list of artifacts (the .buildinfo, .changes
+      and .deb files); the list contains their paths relative to the workspace
+    value: ${{ steps.run.outputs.ARTIFACTS }}
 runs:
   using: composite
   steps:
@@ -65,7 +70,13 @@ runs:
         INPUT_HOST_ARCH: ${{ inputs.host-arch }}
         INPUT_SETUP_HOOK: ${{ inputs.setup-hook }}
         INPUT_SOURCE_DIR: ${{ inputs.source-dir }}
+      id: run
       run: ${{ github.action_path }}/scripts/run
+      shell: bash
+    - env:
+        BUILD_DIR: ${{ steps.run.outputs.build-dir }}
+      if: ${{ always() && steps.run.outputs.build-dir != '' }}
+      run: ${{ github.action_path }}/scripts/post
       shell: bash
 branding:
   color: red
